@@ -1,0 +1,21 @@
+# Generated data and model artifacts
+my_data.csv
+best_model.pth
+heavy_metal_prediction.png
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS artefacts
+.DS_Store
+Thumbs.db
