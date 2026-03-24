@@ -1,11 +1,17 @@
 """
 Helper script: generate synthetic my_data.csv for testing.
 
-Produces 200 samples with:
-  - 150 simulated spectral-reflectance bands (correlated Gaussian)
-  - 8 heavy-metal concentrations (Cu, Zn, Pb, Cd, Cr, Ni, As, Hg)
-    loosely correlated with a few spectral features to give the model
-    something real to learn.
+CSV format produced
+-------------------
+  - 200 rows (sampling points)
+  - First 150 columns : spectral-reflectance bands  (band_1 … band_150)
+  - Last  8  columns  : heavy-metal concentrations  (Cu, Zn, Pb, Cd, Cr, Ni, As, Hg)
+
+This matches the format expected by main.py / data_preprocessing.py:
+    - All columns except the last N (default 8) are treated as spectral bands.
+    - The last N columns are the heavy-metal labels to predict.
+    - Column names are read automatically from the CSV header, so you can
+      rename the metal columns to match your own lab report.
 
 Run once before executing main.py:
     python generate_sample_data.py

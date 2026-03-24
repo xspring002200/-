@@ -4,6 +4,9 @@ Module 1: 测绘级数据自动化接入与预处理 (Data Preprocessing)
 Supports:
 - Reading my_data.csv and splitting into spectral features (X) and
   heavy-metal labels (Y)
+- CSV format: all columns except the last N_METALS columns are spectral
+  bands; the last N_METALS columns are heavy-metal concentrations.
+  Column names are read directly from the CSV header.
 - Savitzky-Golay smoothing (and optional first-derivative transform)
 - StandardScaler normalisation
 - 80/20 train-test split
@@ -19,31 +22,47 @@ from scipy.signal import savgol_filter
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
-# Names of the 8 heavy metals (last 8 columns of my_data.csv)
-METAL_NAMES = ["Cu", "Zn", "Pb", "Cd", "Cr", "Ni", "As", "Hg"]
+# Default number of heavy-metal output columns (last N columns of the CSV)
+N_METALS = 8
 
 
-def load_csv(filepath: str = "my_data.csv") -> tuple[np.ndarray, np.ndarray]:
-    """Read *my_data.csv* and return (X, Y) as numpy arrays.
+def load_csv(
+    filepath: str = "my_data.csv",
+    n_metals: int = N_METALS,
+) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    """Read *my_data.csv* and return ``(X, Y, metal_names)``.
 
-    The file is expected to have **spectral band columns first**, followed by
-    exactly 8 heavy-metal concentration columns (Cu, Zn, Pb, Cd, Cr, Ni, As,
-    Hg).  All columns must be numeric.
+    CSV format expected
+    -------------------
+    - Every row is one sampling point (~200 rows is fine).
+    - All columns **except** the last *n_metals* columns are spectral-band
+      values (e.g. band_1, band_2, … band_N).
+    - The **last** *n_metals* columns are heavy-metal concentrations
+      (e.g. Cd, Cu, Pb, Zn, Cr, Ni, As, Hg).  Column names are taken
+      directly from the CSV header so no renaming is required.
+    - Non-numeric columns (e.g. sample-ID strings) are dropped automatically.
+
+    Returns
+    -------
+    X : np.ndarray, shape (n_samples, n_bands)   – spectral features
+    Y : np.ndarray, shape (n_samples, n_metals)  – metal concentrations
+    metal_names : list[str]                      – column names of the metals
     """
     df = pd.read_csv(filepath)
     # Drop any non-numeric columns (e.g. sample IDs)
     df = df.select_dtypes(include=[np.number])
 
-    n_metals = len(METAL_NAMES)
     if df.shape[1] <= n_metals:
         raise ValueError(
             f"CSV must have more than {n_metals} numeric columns "
-            f"(got {df.shape[1]})."
+            f"(got {df.shape[1]}).  Check that all band columns are numeric "
+            f"and that n_metals ({n_metals}) is correct."
         )
 
+    metal_names = list(df.columns[-n_metals:])
     X = df.iloc[:, :-n_metals].values.astype(np.float32)
     Y = df.iloc[:, -n_metals:].values.astype(np.float32)
-    return X, Y
+    return X, Y, metal_names
 
 
 def apply_savgol(
@@ -79,6 +98,7 @@ def apply_savgol(
 
 def preprocess(
     filepath: str = "my_data.csv",
+    n_metals: int = N_METALS,
     sg_window: int = 11,
     sg_poly: int = 3,
     sg_deriv: int = 0,
@@ -88,18 +108,32 @@ def preprocess(
 ) -> dict:
     """Full preprocessing pipeline.
 
+    Parameters
+    ----------
+    filepath   : path to the CSV file.
+    n_metals   : number of heavy-metal columns at the **end** of the CSV
+                 (default 8).  All preceding numeric columns are treated as
+                 spectral bands.
+    sg_window  : Savitzky-Golay window length (odd integer).
+    sg_poly    : Savitzky-Golay polynomial order.
+    sg_deriv   : derivative order (0 = smooth only, 1 = 1st derivative).
+    test_size  : fraction of samples used for testing (default 0.20).
+    random_state : random seed for reproducible splits.
+    device     : ``"cuda"`` or ``"cpu"``; auto-detected when *None*.
+
     Returns a dict with keys:
         X_train, X_test, Y_train, Y_test  – PyTorch tensors (on *device*)
         scaler_X, scaler_Y                 – fitted StandardScaler objects
-        metal_names                        – list[str]
+        metal_names                        – list[str] from CSV column headers
         device                             – torch.device in use
+        n_bands                            – number of spectral bands
     """
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
     dev = torch.device(device)
 
-    # 1. Load data
-    X_raw, Y_raw = load_csv(filepath)
+    # 1. Load data – metal names are read from the CSV header
+    X_raw, Y_raw, metal_names = load_csv(filepath, n_metals=n_metals)
 
     # 2. Savitzky-Golay smoothing / derivative
     X_sg = apply_savgol(X_raw, window_length=sg_window,
@@ -128,7 +162,7 @@ def preprocess(
         "Y_test": to_tensor(Y_te),
         "scaler_X": scaler_X,
         "scaler_Y": scaler_Y,
-        "metal_names": METAL_NAMES,
+        "metal_names": metal_names,
         "device": dev,
         "n_bands": X_scaled.shape[1],
     }

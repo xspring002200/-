@@ -40,6 +40,10 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--data",        default="my_data.csv",
                    help="Path to the CSV data file")
+    p.add_argument("--n_metals",    type=int, default=8,
+                   help="Number of heavy-metal columns at the END of the CSV "
+                        "(default 8). All preceding numeric columns are treated "
+                        "as spectral bands.")
     p.add_argument("--epochs",      type=int, default=300,
                    help="Number of training epochs (200–500 recommended)")
     p.add_argument("--batch_size",  type=int, default=16,
@@ -80,6 +84,7 @@ def main() -> None:
 
     data = preprocess(
         filepath=args.data,
+        n_metals=args.n_metals,
         sg_window=args.sg_window,
         sg_poly=args.sg_poly,
         sg_deriv=args.sg_deriv,
